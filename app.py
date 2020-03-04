@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
+
 # Dependencies
 import numpy as np
 import pandas as pd
@@ -24,8 +30,12 @@ access_token = api_keys.access_token
 access_token_secret = api_keys.access_token_secret
 user = api_keys.user
 
+
+# In[2]:
+
+
 # Function for Analyzing Tweets
-def AnalyzeTweets():
+def tweetbot():
 
     #prepare api keys for call 
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
@@ -44,33 +54,26 @@ def AnalyzeTweets():
     # Input Tweet
     words = []
 
-    # Specified Twitter Account
-    target_account = ""
-
-    # Grab the most recent command tweet
-    
-
     # Split it to determine the target account
     try:
         words = command.split("Analyze:")
-        target_account = words[1].strip()
+        #parse the username who made the request
+        target_account = f"{words[1].strip()}"
 
-        # Confirm target_account
+        #confirm target_account
         print("Target Account: " + target_account)
         print("Requesting User: " + requesting_user)
 
     except Exception:
         raise
 
-    # ## Confirm Non-Repeat
+    #check timeline for duplicates of target_account
+    mytweets = api.user_timeline()
 
-    # Grab Self Tweets
-    tweets = api.user_timeline()
-
-    # Confirm the target account has never been tweeted before
+    #confirm target_account has never been tweeted before
     repeat = False
 
-    #for tweet in tweets:
+    #for tweet in mytweets:
     #    if target_account in tweet["text"]:
     #        repeat = True
     #        print("Sorry. Repeat detected!")
@@ -78,13 +81,12 @@ def AnalyzeTweets():
     #    else:
     #        continue
 
-    # ## Run Sentiment Analysis
 
-    # If the tweet specifies a unique account run the analysis
+    #if the target_account is not a duplicate
     if not (repeat):
 
-        # Create a generic dictionary for holding all tweet information
-        tweet_data = {
+        # make empty dictionary into which the data will be appended
+        tweets_dict = {
             "tweet_source": [],
             "tweet_text": [],
             "tweet_date": [],
@@ -94,69 +96,28 @@ def AnalyzeTweets():
             "tweet_neu_score": []
         }
 
-        # Grab 500 tweets from the target source
+        #loop through 25 pages for each News Source (where x = page number);
+        #at 20 tweets per page, this will yield 500 tweets
         for x in range(25):
 
-            # Grab the tweets
-            tweets = api.user_timeline(target_account, page=x)
+            #run the API call
+            target_tweets = api.user_timeline(target_account, page=x)
 
-            # For each tweet store it into the dictionary
-            for tweet in tweets:
+            #append each tweet to tweets_dict
+            for tweet in target_tweets:
+                tweets_dict["tweet_source"].append(tweet["user"]["name"])
+                tweets_dict["tweet_text"].append(tweet["text"])
+                tweets_dict["tweet_date"].append(tweet["created_at"])
+                #set up vader variable
+                runvader = analyzer.polarity_scores(tweet["text"])
+                #run vader to produce sentiment values
+                tweets_dict["tweet_vader_score"].append(runvader["compound"])
+                tweets_dict["tweet_pos_score"].append(runvader["pos"])
+                tweets_dict["tweet_neu_score"].append(runvader["neu"])
+                tweets_dict["tweet_neg_score"].append(runvader["neg"])
 
-                # All data is grabbed from the JSON returned by Twitter
-                tweet_data["tweet_source"].append(tweet["user"]["name"])
-                tweet_data["tweet_text"].append(tweet["text"])
-                tweet_data["tweet_date"].append(tweet["created_at"])
-
-                # Run sentiment analysis on each tweet using Vader
-                tweet_data["tweet_vader_score"].append(
-                    analyzer.polarity_scores(tweet["text"])["compound"])
-                tweet_data["tweet_pos_score"].append(analyzer.polarity_scores(
-                    tweet["text"])["pos"])
-                tweet_data["tweet_neu_score"].append(analyzer.polarity_scores(
-                    tweet["text"])["neu"])
-                tweet_data["tweet_neg_score"].append(analyzer.polarity_scores(
-                    tweet["text"])["neg"])
-
-    if not (repeat):
-
-        # Create a generic dictionary for holding all tweet information
-        tweet_data = {
-            "tweet_source": [],
-            "tweet_text": [],
-            "tweet_date": [],
-            "tweet_vader_score": [],
-            "tweet_neg_score": [],
-            "tweet_pos_score": [],
-            "tweet_neu_score": []
-        }
-
-        # Grab 500 tweets from the target source
-        for x in range(25):
-
-            # Grab the tweets
-            tweets = api.user_timeline(target_account, page=x)
-
-            # For each tweet store it into the dictionary
-            for tweet in tweets:
-
-                # All data is grabbed from the JSON returned by Twitter
-                tweet_data["tweet_source"].append(tweet["user"]["name"])
-                tweet_data["tweet_text"].append(tweet["text"])
-                tweet_data["tweet_date"].append(tweet["created_at"])
-
-                # Run sentiment analysis on each tweet using Vader
-                tweet_data["tweet_vader_score"].append(
-                    analyzer.polarity_scores(tweet["text"])["compound"])
-                tweet_data["tweet_pos_score"].append(analyzer.polarity_scores(
-                    tweet["text"])["pos"])
-                tweet_data["tweet_neu_score"].append(analyzer.polarity_scores(
-                    tweet["text"])["neu"])
-                tweet_data["tweet_neg_score"].append(analyzer.polarity_scores(
-                    tweet["text"])["neg"])
-
-        # Store the final contents into a DataFrame
-        tweet_df = pd.DataFrame(tweet_data, columns=["tweet_source",
+        #convert to dataframe
+        df = pd.DataFrame(tweets_dict, columns=["tweet_source",
                                                      "tweet_text",
                                                      "tweet_date",
                                                      "tweet_vader_score",
@@ -164,20 +125,16 @@ def AnalyzeTweets():
                                                      "tweet_neu_score",
                                                      "tweet_neg_score"])
 
-        # Visualize the DataFrame
-        tweet_df.head()
 
     if not (repeat):
 
         # Convert dates (currently strings) into datetimes
-        tweet_df["tweet_date"] = pd.to_datetime(tweet_df["tweet_date"])
-
+        df["tweet_date"] = pd.to_datetime(df["tweet_date"])
+        
         # Sort the dataframe by date
-        tweet_df.sort_values("tweet_date", inplace=True)
-        tweet_df.reset_index(drop=True, inplace=True)
+        df.sort_values("tweet_date", inplace=True)
+        df.reset_index(drop=True, inplace=True)
 
-        # Preview the data to confirm data is sorted
-        tweet_df.head()
 
     if not (repeat):
 
@@ -187,15 +144,15 @@ def AnalyzeTweets():
         # Build scatter plot for tracking tweet polarity by tweet history
         # Note how a few data munging tricks were used to obtain (-100 -> 0
         # ticks)
-        plt.plot(np.arange(-len(tweet_df["tweet_vader_score"]), 0, 1),
-                 tweet_df["tweet_vader_score"], marker="o", linewidth=0.5,
+        plt.plot(np.arange(-len(df["tweet_vader_score"]), 0, 1),
+                 df["tweet_vader_score"], marker="o", linewidth=0.5,
                  alpha=0.8, label="%s" % target_account)
 
         # Incorporate the other graph properties
         plt.title("Sentiment Analysis of Tweets (%s)" % time.strftime("%x"))
         plt.ylabel("Tweet Polarity")
         plt.xlabel("Tweets Ago")
-        plt.xlim([-len(tweet_df["tweet_vader_score"]) - 7, 7])
+        plt.xlim([-len(df["tweet_vader_score"]) - 7, 7])
         plt.ylim([-1.05, 1.05])
         plt.grid(True)
 
@@ -216,10 +173,21 @@ def AnalyzeTweets():
 
         # Tweet out the image and mention the user who requested it
         api.update_with_media(file_path,
-                              f"New Tweet Analysis: {target_account} (Thx @{requesting_user}!!)")
+                              f"(machine version) New Tweet Analysis: {target_account} (Thx @{requesting_user}!!)")
+
+
+# In[ ]:
+
 
 # Run the Analyze Tweets Function Every 5 minutes
 while(True):
-    AnalyzeTweets()
+    tweetbot()
     print("finished")
-    time.sleep(30)
+    time.sleep(300)
+
+
+# In[ ]:
+
+
+
+
